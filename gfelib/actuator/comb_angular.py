@@ -1,12 +1,10 @@
 from __future__ import annotations
 
+import gdsfactory as gf
 
 import numpy as np
-from collections.abc import Sequence
 
 import gfelib as gl
-
-import gdsfactory as gf
 
 
 @gl.utils.default_cell
@@ -14,71 +12,48 @@ def comb_angular(
     radius_inner: float,
     radius_outer: float,
     angles: tuple[float, float],
-    comb_gap: float,
-    comb_count: int,
-    comb_overlap_angle: float,
+    overlap: float,
+    gap: float,
+    count: int,
     geometry_layer: gf.typings.LayerSpec,
     angle_resolution: float,
+    release_spec_a: gl.datatypes.ReleaseSpec | None,
+    release_spec_b: gl.datatypes.ReleaseSpec | None,
 ) -> gf.Component:
-    """
-    Generates an angular comb structure composed of concentric arc fingers.
+    """Returns an angular comb
 
-    Parameters
-    ----------
-    radius_inner : float
-        Inner radius of the innermost finger.
-    radius_outer : float
-        Outer radius of the outermost finger.
-    angles : (float, float)
-        Start and end angles in degrees.
-    comb_gap : float
-        Radial gap between adjacent fingers.
-    comb_count : int
-        Number of gaps (number of fingers = comb_count + 1).
-    comb_overlap_angle : float
-        Angular overlap added on both sides of each finger (degrees).
-    geometry_layer : LayerSpec
-        GDS layer for geometry.
-    angle_resolution : float
-        Angular discretization in degrees (passed to ring).
-
-    Returns
-    -------
-    gf.Component
+    Args:
+        radius_inner: comb inner radius
+        radius_outer: comb outer radius
+        angles: comb start and end angles
+        overlap: comb finger overlap (unit: degrees)
+        gap: comb finger gap
+        count: comb count, finger count is `count + 1`
+        geometry_layer: comb polygon layer
+        angle_resolution: degrees per point for circular geometries
+        release_spec_a: release specifications for lower angle combs, `None` for no release
+        release_spec_b: release specifications for higher angle combs, `None` for no release
     """
     c = gf.Component()
 
-    theta_start, theta_end = sorted(angles)
-    span = (theta_end - theta_start + comb_overlap_angle) / 2
+    angles = sorted(angles)
 
-    if span <= 0:
-        raise ValueError("Invalid geometry: angular span <= 0")
+    finger_span = 0.5 * (angles[1] - angles[0] + overlap)
+    finger_width = (radius_outer - radius_inner - gap * count) / (count + 1)
 
-    # Number of fingers
-    n_fingers = comb_count + 1
-
-    # Total radial span available
-    total_radial_span = radius_outer - radius_inner
-
-    # Solve finger width assuming:
-    # n_fingers * finger_width + comb_count * comb_gap = total_radial_span
-    finger_width = (total_radial_span - comb_count * comb_gap) / n_fingers
-
-    if finger_width <= 0:
-        raise ValueError("Invalid geometry: finger width <= 0")
-
-    for i in range(n_fingers):
-        r_in = radius_inner + i * (finger_width + comb_gap)
-        r_out = r_in + finger_width
-
-        ring = gf.components.ring(
-            radius=(r_in + r_out) / 2,
-            width=finger_width,
-            angle=span,
-            layer=geometry_layer,
+    for i in range(count + 1):
+        r = radius_inner + i * (finger_width + gap)
+        ring = gl.basic.ring(
+            radius_inner=r,
+            radius_outer=r + finger_width,
+            angles=(
+                angles[0] if (i % 2 == 0) else angles[1] - finger_span,
+                angles[0] + finger_span if (i % 2 == 0) else angles[1],
+            ),
+            geometry_layer=geometry_layer,
             angle_resolution=angle_resolution,
+            release_spec=release_spec_a if (i % 2 == 0) else release_spec_b,
         )
-
-        (c << ring).rotate(theta_start if (i % 2 == 0) else theta_end - span)
+        _ = c << ring
 
     return c
