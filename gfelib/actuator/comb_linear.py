@@ -15,7 +15,8 @@ def comb_linear(
     gap: float,
     count: int,
     geometry_layer: gf.typings.LayerSpec,
-    release_spec: gl.datatypes.ReleaseSpec | None,
+    release_spec_a: gl.datatypes.ReleaseSpec | None,
+    release_spec_b: gl.datatypes.ReleaseSpec | None,
 ) -> gf.Component:
     """Returns a linear rectangular comb, south-west is (0, 0)
 
@@ -26,7 +27,8 @@ def comb_linear(
         gap: comb finger gap (x)
         count: comb count, finger count is `count + 1`
         geometry_layer: comb polygon layer
-        release_spec: release specifications for top combs, `None` for no release
+        release_spec_a: release specifications for bottom combs, `None` for no release
+        release_spec_b: release specifications for top combs, `None` for no release
     """
     c = gf.Component()
 
@@ -39,7 +41,7 @@ def comb_linear(
             size=(finger_width, finger_length),
             geometry_layer=geometry_layer,
             centered=False,
-            release_spec=None if (i % 2 == 0) else release_spec,
+            release_spec=release_spec_a if (i % 2 == 0) else release_spec_b,
         )
         ref = c << finger
         ref.move(
