@@ -1,60 +1,52 @@
 from __future__ import annotations
 
+import gdsfactory as gf
 
 import numpy as np
-from collections.abc import Sequence
 
 import gfelib as gl
-
-import gdsfactory as gf
 
 
 @gl.utils.default_cell
 def comb_linear(
-    comb_height: float,
-    comb_width: float,
-    comb_gap: float,
-    comb_count: int,
-    comb_overlap: float,
+    height: float,
+    width: float,
+    overlap: float,
+    gap: float,
+    count: int,
     geometry_layer: gf.typings.LayerSpec,
+    release_spec: gl.datatypes.ReleaseSpec | None,
 ) -> gf.Component:
-    """
-    Generates a comb structure composed of fingers.
+    """Returns a linear rectangular comb, south-west is (0, 0)
 
-    Parameters
-    ----------
-    comb_height : float
-        Total height of the comb
-    comb_width : float
-        Width of each finger
-    comb_gap : float
-        x gap between adjacent fingers.
-    comb_count : int
-        Number of gaps (number of fingers = comb_count + 1).
-    comb_overlap : float
-        x overlap between the fingers
-    geometry_layer : LayerSpec
-        GDS layer for geometry.
-
-    Returns
-    -------
-    gf.Component
+    Args:
+        height: comb total height (y), height of each finger is `0.5 * (height + overlap)`
+        width: comb total width (x), width of each finger is `(width + gap) * count - gap`
+        overlap: comb finger overlap (y)
+        gap: comb finger gap (x)
+        count: comb finger count
+        geometry_layer: comb polygon layer
+        release_spec: release specifications for top combs, `None` for no release
     """
     c = gf.Component()
 
-    # Number of fingers
-    n_fingers = comb_count + 1
-    comb_length = (comb_height + comb_overlap) / 2
-    comb_clearance = comb_height - comb_length
+    finger_length = 0.5 * (height + overlap)
+    finger_width = (width - gap * (count - 1)) / count
+    offset = height - finger_length
 
-    for i in range(n_fingers):
-        x = i * (comb_width + comb_gap)
-        y = 0 if (i % 2 == 0) else comb_clearance
-
-        finger = gf.components.rectangle(
-            size=(comb_width, comb_length), layer=geometry_layer, centered=False
+    for i in range(count):
+        finger = gl.basic.rectangle(
+            size=(finger_width, finger_length),
+            geometry_layer=geometry_layer,
+            centered=False,
+            release_spec=None if (i % 2 == 0) else release_spec,
         )
-
-        (c << finger).move((x, y))
+        ref = c << finger
+        ref.move(
+            (
+                i * (finger_width + gap),
+                0 if (i % 2 == 0) else offset,
+            )
+        )
 
     return c
