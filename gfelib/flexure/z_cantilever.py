@@ -136,6 +136,9 @@ def z_cantilever(
 
     beams.sort(key=lambda x: x.get_position(length))
 
+    isolation_region = gf.Component()
+    inset_region = gf.Component()
+
     for beam in beams:
         position = beam.get_position(length)
 
@@ -151,39 +154,20 @@ def z_cantilever(
                 length if isolation_region_e > length else isolation_region_e
             )
 
-            isolation_region = gf.Component()
-            isolation_region_ref = isolation_region << gf.components.rectangle(
+            isolation_rect = gf.components.rectangle(
                 size=(isolation_region_e - isolation_region_s, isolation_y),
                 layer=geometry_layer,
                 centered=False,
             )
-            isolation_region_ref.move((isolation_region_s, 0.5 * width - isolation_y))
-            isolation_region.flatten()
 
-            isolation_expand = isolation_region.copy()
-            isolation_expand.offset(layer=geometry_layer, distance=clearance)
+            if beam.place[0]:
+                ref = isolation_region << isolation_rect
+                ref.move((isolation_region_s, 0.5 * width - isolation_y))
+                ref.imirror_y(0)
 
-            for place in beam.place:
-                isolation_expand.mirror_y(0)
-                isolation_region.mirror_y(0)
-                if place:
-                    c = gf.boolean(
-                        A=c,
-                        B=isolation_expand,
-                        operation="-",
-                        layer=geometry_layer,
-                        layer1=geometry_layer,
-                        layer2=geometry_layer,
-                    )
-
-                    c = gf.boolean(
-                        A=c,
-                        B=isolation_region,
-                        operation="|",
-                        layer=geometry_layer,
-                        layer1=geometry_layer,
-                        layer2=geometry_layer,
-                    )
+            if beam.place[1]:
+                ref = isolation_region << isolation_rect
+                ref.move((isolation_region_s, 0.5 * width - isolation_y))
 
         if beam.insetted:
             inset_x = beam.get_inset_x(length)
@@ -195,26 +179,54 @@ def z_cantilever(
             inset_region_e = position + 0.5 * inset_x
             inset_region_e = length if inset_region_e > length else inset_region_e
 
-            inset_region = gf.Component()
-            inset_region_ref = inset_region << gf.components.rectangle(
+            inset_region_rect = gf.components.rectangle(
                 size=(inset_region_e - inset_region_s, inset_y),
                 layer=geometry_layer,
                 centered=False,
             )
-            inset_region_ref.move((inset_region_s, 0.5 * width - inset_y))
-            inset_region.flatten()
 
-            for place in beam.place:
-                inset_region.mirror_y(0)
-                if place:
-                    c = gf.boolean(
-                        A=c,
-                        B=inset_region,
-                        operation="-",
-                        layer=geometry_layer,
-                        layer1=geometry_layer,
-                        layer2=geometry_layer,
-                    )
+            if beam.place[0]:
+                ref = inset_region << inset_region_rect
+                ref.move((inset_region_s, 0.5 * width - inset_y))
+                ref.imirror_y(0)
+
+            if beam.place[1]:
+                ref = inset_region << inset_region_rect
+                ref.move((inset_region_s, 0.5 * width - inset_y))
+
+    isolation_region.flatten()
+
+    isolation_expand = isolation_region.copy()
+    isolation_expand.offset(layer=geometry_layer, distance=clearance)
+
+    c = gf.boolean(
+        A=c,
+        B=isolation_expand,
+        operation="-",
+        layer=geometry_layer,
+        layer1=geometry_layer,
+        layer2=geometry_layer,
+    )
+
+    c = gf.boolean(
+        A=c,
+        B=isolation_region,
+        operation="|",
+        layer=geometry_layer,
+        layer1=geometry_layer,
+        layer2=geometry_layer,
+    )
+
+    inset_region.flatten()
+
+    c = gf.boolean(
+        A=c,
+        B=inset_region,
+        operation="-",
+        layer=geometry_layer,
+        layer1=geometry_layer,
+        layer2=geometry_layer,
+    )
 
     for beam in beams:
         position = beam.get_position(length)
