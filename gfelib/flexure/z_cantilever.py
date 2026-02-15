@@ -4,6 +4,7 @@ import gdsfactory as gf
 from collections.abc import Sequence
 import pydantic
 import hashlib
+import warnings
 
 import gfelib as gl
 
@@ -266,5 +267,144 @@ def z_cantilever(
         centered=True,
     )
     h_rect_ref.movex(0.5 * length)
+
+    return c
+
+
+@warnings.deprecated(
+    "Retained for backward compatibility and will be removed in a future release. Use `flexure.z_cantilever` instead."
+)
+@gl.utils.default_cell
+def z_cantilever_half(
+    length: float,
+    width: float,
+    beams: Sequence[ZCantileverBeam],
+    clearance: float,
+    middle_split: bool,
+    geometry_layer: gf.typings.LayerSpec,
+    handle_layer: gf.typings.LayerSpec | None,
+    release_spec: gl.datatypes.ReleaseSpec | None,
+) -> gf.Component:
+    """Returns a half-z-cantilever with arbitrary beams
+
+    Args:
+        length: cantilever body length (x)
+        length: cantilever body width (y)
+        beams: list of beams to place
+        clearance: electrical isolation distance
+        middle_split: `True` to split top and bottom half
+        geometry_layer: cantilever polygon layer
+        handle_layer: handle polygon layer
+        release_spec: release specifications, `None` for no release
+    """
+    c = gf.Component()
+
+    y_offset = 0.5 * clearance if middle_split else 0
+    rect_ref = c << gf.components.rectangle(
+        size=(length, 0.5 * width - y_offset),
+        layer=geometry_layer,
+        centered=False,
+    )
+    rect_ref.movey(y_offset)
+
+    beams.sort(key=lambda x: x.get_position(length))
+
+    for beam in beams:
+        position = beam.get_position(length)
+
+        if beam.isolated:
+            isolation_x = beam.get_isolation_x(length)
+            isolation_y = beam.get_isolation_y(width)
+
+            isolation_region_s = position - 0.5 * isolation_x
+            isolation_region_s = 0 if isolation_region_s < 0 else isolation_region_s
+
+            isolation_region_e = position + 0.5 * isolation_x
+            isolation_region_e = (
+                length if isolation_region_e > length else isolation_region_e
+            )
+
+            isolation_region = gf.Component()
+            isolation_region_ref = isolation_region << gf.components.rectangle(
+                size=(isolation_region_e - isolation_region_s, isolation_y),
+                layer=geometry_layer,
+                centered=False,
+            )
+            isolation_region_ref.move((isolation_region_s, 0.5 * width - isolation_y))
+            isolation_region.flatten()
+
+            isolation_expand = isolation_region.copy()
+            isolation_expand.offset(layer=geometry_layer, distance=clearance)
+
+            c = gf.boolean(
+                A=c,
+                B=isolation_expand,
+                operation="-",
+                layer=geometry_layer,
+                layer1=geometry_layer,
+                layer2=geometry_layer,
+            )
+
+            c = gf.boolean(
+                A=c,
+                B=isolation_region,
+                operation="|",
+                layer=geometry_layer,
+                layer1=geometry_layer,
+                layer2=geometry_layer,
+            )
+
+        if beam.insetted:
+            inset_x = beam.get_inset_x(length)
+            inset_y = beam.get_inset_y(width)
+
+            inset_region_s = position - 0.5 * inset_x
+            inset_region_s = 0 if inset_region_s < 0 else inset_region_s
+
+            inset_region_e = position + 0.5 * inset_x
+            inset_region_e = length if inset_region_e > length else inset_region_e
+
+            inset_region = gf.Component()
+            inset_region_ref = inset_region << gf.components.rectangle(
+                size=(inset_region_e - inset_region_s, inset_y),
+                layer=geometry_layer,
+                centered=False,
+            )
+            inset_region_ref.move((inset_region_s, 0.5 * width - inset_y))
+            inset_region.flatten()
+
+            c = gf.boolean(
+                A=c,
+                B=inset_region,
+                operation="-",
+                layer=geometry_layer,
+                layer1=geometry_layer,
+                layer2=geometry_layer,
+            )
+
+    for beam in beams:
+        position = beam.get_position(length)
+        inset = beam.get_inset_y(width) if beam.insetted else 0
+
+        ref = c << gl.flexure.beam(
+            length=beam.length,
+            width=beam.width,
+            geometry_layer=geometry_layer,
+            beam_spec=beam.spec,
+            release_spec=release_spec,
+        )
+        ref.rotate(angle=90, center=(0, 0))
+        ref.move(
+            (
+                position,
+                0.5 * width + 0.5 * beam.length - inset,
+            )
+        )
+
+    _ = c << gf.components.rectangle(
+        size=(length, 0.5 * width),
+        layer=handle_layer,
+        centered=False,
+    )
 
     return c
