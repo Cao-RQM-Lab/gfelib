@@ -104,7 +104,7 @@ def z_cantilever(
 
     Args:
         length: cantilever body length (x)
-        length: cantilever body width (y)
+        width: cantilever body width (y)
         beams: list of beams to place
         clearance: electrical isolation distance
         middle_split: `True` to split top and bottom half
